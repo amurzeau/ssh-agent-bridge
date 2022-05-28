@@ -56,10 +56,11 @@ func convertCygwinPathToWindows(path string) string {
 
 func main() {
 	var (
-		argFrom           *string
-		argTo             *string
-		argPipePath       *string
-		argUnixSocketPath *string
+		argFrom                 *string
+		argTo                   *string
+		argPipePath             *string
+		argCygwinUnixSocketPath *string
+		argWslUnixSocketPath    *string
 	)
 
 	var sshAgentFromMap = map[string]func(chan agent.AgentMessageQuery){
@@ -67,10 +68,10 @@ func main() {
 			namedPipe.ServePipe(*argPipePath, queryChannel)
 		},
 		"cygwin-ssh-agent": func(queryChannel chan agent.AgentMessageQuery) {
-			cygwinUnixSocket.ServeUnixSocket(*argUnixSocketPath, queryChannel)
+			cygwinUnixSocket.ServeUnixSocket(*argCygwinUnixSocketPath, queryChannel)
 		},
 		"wsl-ssh-agent": func(queryChannel chan agent.AgentMessageQuery) {
-			wslUnixSocket.ServeWslUnixSocket(*argUnixSocketPath, queryChannel)
+			wslUnixSocket.ServeWslUnixSocket(*argWslUnixSocketPath, queryChannel)
 		},
 		"pageant": func(queryChannel chan agent.AgentMessageQuery) {
 			pageant.ServePageant(queryChannel)
@@ -82,10 +83,10 @@ func main() {
 			return namedPipe.ClientPipe(*argPipePath, queryChannel)
 		},
 		"cygwin-ssh-agent": func(queryChannel chan agent.AgentMessageQuery) error {
-			return cygwinUnixSocket.ClientUnixSocket(*argUnixSocketPath, queryChannel)
+			return cygwinUnixSocket.ClientUnixSocket(*argCygwinUnixSocketPath, queryChannel)
 		},
 		"wsl-ssh-agent": func(queryChannel chan agent.AgentMessageQuery) error {
-			return wslUnixSocket.ClientWslUnixSocket(*argUnixSocketPath, queryChannel)
+			return wslUnixSocket.ClientWslUnixSocket(*argWslUnixSocketPath, queryChannel)
 		},
 		"pageant": func(queryChannel chan agent.AgentMessageQuery) error {
 			return pageant.ClientPageant(queryChannel)
@@ -100,8 +101,9 @@ func main() {
 		fmt.Sprintf("endpoint to use as upstream agent, available: %s",
 			strings.Join(keys(sshAgentToMap), ", ")))
 
-	argPipePath = flag.String("pipe", `\\.\pipe\openssh-ssh-agent`, "path to the pipe to listen")
-	argUnixSocketPath = flag.String("unix-socket", os.Getenv("SSH_AUTH_SOCK"), "path to the ssh-agent unix socket (only for ssh-agent mode)")
+	argPipePath = flag.String("pipe", `\\.\pipe\openssh-ssh-agent`, "path to the pipe to use for pipe mode")
+	argCygwinUnixSocketPath = flag.String("unix-socket", os.Getenv("SSH_AUTH_SOCK"), "path to the ssh-agent unix socket for cygwin-ssh-agent mode")
+	argWslUnixSocketPath = flag.String("wsl-socket", os.Getenv("SSH_AUTH_SOCK"), "path to the WSL ssh-agent unix socket for wsl-ssh-agent mode")
 
 	argDebug := flag.Bool("debug", false, "enable debug logs")
 
@@ -120,7 +122,8 @@ func main() {
 
 	// Convert cygwin/msys paths to native Windows path
 	if runtime.GOOS == "windows" {
-		*argUnixSocketPath = convertCygwinPathToWindows(*argUnixSocketPath)
+		*argCygwinUnixSocketPath = convertCygwinPathToWindows(*argCygwinUnixSocketPath)
+		*argWslUnixSocketPath = convertCygwinPathToWindows(*argWslUnixSocketPath)
 	}
 
 	// A single channel is used for all queries, as we support only one target "to"
