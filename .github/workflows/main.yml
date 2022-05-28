@@ -14,7 +14,7 @@ jobs:
         go-version: 1.18
 
     - name: Build for windows/amd64
-      run: env GOOS=windows GOARCH=amd64 go build -v -o build/ssh-agent-bridge.exe .
+      run: env GOOS=windows GOARCH=amd64 go build -v -ldflags "-H windowsgui" -o build/ssh-agent-bridge.exe .
 
     - name: Upload Build Artifact
       uses: actions/upload-artifact@v2.2.4

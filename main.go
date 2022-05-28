@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"flag"
 	"fmt"
 	"os"
@@ -14,7 +15,50 @@ import (
 	"github.com/amurzeau/ssh-agent-bridge/agent/pageant"
 	"github.com/amurzeau/ssh-agent-bridge/agent/wslUnixSocket"
 	"github.com/amurzeau/ssh-agent-bridge/log"
+
+	"github.com/getlantern/systray"
 )
+
+//go:embed assets/oxygen-status-wallet-open.ico
+var assetsOxygenStatusWalletOpen []byte
+
+var (
+	argFrom                 *string
+	argTo                   *string
+	argPipePath             *string
+	argCygwinUnixSocketPath *string
+	argWslUnixSocketPath    *string
+)
+
+var sshAgentFromMap = map[string]func(chan agent.AgentMessageQuery){
+	"pipe": func(queryChannel chan agent.AgentMessageQuery) {
+		namedPipe.ServePipe(*argPipePath, queryChannel)
+	},
+	"cygwin": func(queryChannel chan agent.AgentMessageQuery) {
+		cygwinUnixSocket.ServeUnixSocket(*argCygwinUnixSocketPath, queryChannel)
+	},
+	"wsl": func(queryChannel chan agent.AgentMessageQuery) {
+		wslUnixSocket.ServeWslUnixSocket(*argWslUnixSocketPath, queryChannel)
+	},
+	"pageant": func(queryChannel chan agent.AgentMessageQuery) {
+		pageant.ServePageant(queryChannel)
+	},
+}
+
+var sshAgentToMap = map[string]func(chan agent.AgentMessageQuery) error{
+	"pipe": func(queryChannel chan agent.AgentMessageQuery) error {
+		return namedPipe.ClientPipe(*argPipePath, queryChannel)
+	},
+	"cygwin": func(queryChannel chan agent.AgentMessageQuery) error {
+		return cygwinUnixSocket.ClientUnixSocket(*argCygwinUnixSocketPath, queryChannel)
+	},
+	"wsl": func(queryChannel chan agent.AgentMessageQuery) error {
+		return wslUnixSocket.ClientWslUnixSocket(*argWslUnixSocketPath, queryChannel)
+	},
+	"pageant": func(queryChannel chan agent.AgentMessageQuery) error {
+		return pageant.ClientPageant(queryChannel)
+	},
+}
 
 func keys[T any, Key comparable](m map[Key]T) []Key {
 	j := 0
@@ -55,50 +99,13 @@ func convertCygwinPathToWindows(path string) string {
 }
 
 func main() {
-	var (
-		argFrom                 *string
-		argTo                   *string
-		argPipePath             *string
-		argCygwinUnixSocketPath *string
-		argWslUnixSocketPath    *string
-	)
-
-	var sshAgentFromMap = map[string]func(chan agent.AgentMessageQuery){
-		"pipe": func(queryChannel chan agent.AgentMessageQuery) {
-			namedPipe.ServePipe(*argPipePath, queryChannel)
-		},
-		"cygwin-ssh-agent": func(queryChannel chan agent.AgentMessageQuery) {
-			cygwinUnixSocket.ServeUnixSocket(*argCygwinUnixSocketPath, queryChannel)
-		},
-		"wsl-ssh-agent": func(queryChannel chan agent.AgentMessageQuery) {
-			wslUnixSocket.ServeWslUnixSocket(*argWslUnixSocketPath, queryChannel)
-		},
-		"pageant": func(queryChannel chan agent.AgentMessageQuery) {
-			pageant.ServePageant(queryChannel)
-		},
-	}
-
-	var sshAgentToMap = map[string]func(chan agent.AgentMessageQuery) error{
-		"pipe": func(queryChannel chan agent.AgentMessageQuery) error {
-			return namedPipe.ClientPipe(*argPipePath, queryChannel)
-		},
-		"cygwin-ssh-agent": func(queryChannel chan agent.AgentMessageQuery) error {
-			return cygwinUnixSocket.ClientUnixSocket(*argCygwinUnixSocketPath, queryChannel)
-		},
-		"wsl-ssh-agent": func(queryChannel chan agent.AgentMessageQuery) error {
-			return wslUnixSocket.ClientWslUnixSocket(*argWslUnixSocketPath, queryChannel)
-		},
-		"pageant": func(queryChannel chan agent.AgentMessageQuery) error {
-			return pageant.ClientPageant(queryChannel)
-		},
-	}
 
 	argFrom = flag.String("from", "",
-		fmt.Sprintf("comma-separated list of endpoint to listen on, available: all, %s",
+		fmt.Sprintf("comma-separated list of endpoint to listen on, available: all, %s (cygwin also work for Git for Windows)",
 			strings.Join(keys(sshAgentFromMap), ", ")))
 
 	argTo = flag.String("to", "pageant",
-		fmt.Sprintf("endpoint to use as upstream agent, available: %s",
+		fmt.Sprintf("endpoint to use as upstream agent, available: %s (cygwin also work for Git for Windows)",
 			strings.Join(keys(sshAgentToMap), ", ")))
 
 	argPipePath = flag.String("pipe", `\\.\pipe\openssh-ssh-agent`, "path to the pipe to use for pipe mode")
@@ -130,6 +137,21 @@ func main() {
 		*argWslUnixSocketPath = convertCygwinPathToWindows(*argWslUnixSocketPath)
 	}
 
+	systray.Run(onReady, onExit)
+}
+
+func onReady() {
+	systray.SetIcon(assetsOxygenStatusWalletOpen)
+	systray.SetTitle("SSH Agent Bridge")
+	systray.SetTooltip("SSH Agent Bridge")
+	mExit := systray.AddMenuItem("Exit", "Exit SSH Agent Bridge")
+	go func() {
+		<-mExit.ClickedCh
+		log.Debugf("Requesting quit")
+		systray.Quit()
+		log.Debugf("Finished quitting")
+	}()
+
 	// A single channel is used for all queries, as we support only one target "to"
 	queryChannel := make(chan agent.AgentMessageQuery)
 
@@ -150,14 +172,20 @@ func main() {
 
 	if clientHandler, ok := sshAgentToMap[*argTo]; ok {
 		log.Infof("Forwarding ssh agent queries to %s", *argTo)
-		// Run upstream agent handler (blocking)
-		err := clientHandler(queryChannel)
-		if err != nil {
-			log.Fatalf("error with upstream agent: %v", err)
-		}
+		// Run upstream agent handler
+		go func() {
+			err := clientHandler(queryChannel)
+			if err != nil {
+				log.Fatalf("error with upstream agent: %v", err)
+			}
+		}()
 	} else {
 		log.Fatalf("Bad --to value %s, available: %s",
 			*argTo,
 			strings.Join(keys(sshAgentToMap), ", "))
 	}
+}
+
+func onExit() {
+	os.Exit(0)
 }
