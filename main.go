@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"regexp"
 	"runtime"
@@ -14,6 +13,7 @@ import (
 	"github.com/amurzeau/ssh-agent-bridge/agent/namedPipe"
 	"github.com/amurzeau/ssh-agent-bridge/agent/pageant"
 	"github.com/amurzeau/ssh-agent-bridge/agent/wslUnixSocket"
+	"github.com/amurzeau/ssh-agent-bridge/log"
 )
 
 func keys[T any, Key comparable](m map[Key]T) []Key {
@@ -46,7 +46,7 @@ func convertCygwinPathToWindows(path string) string {
 	nativePath = reCygwinDriveDir.ReplaceAllString(nativePath, "$2:/")
 
 	if path != nativePath {
-		log.Printf("Converting cygwin path from %s to %s",
+		log.Debugf("converting cygwin path from %s to %s",
 			path,
 			nativePath)
 	}
@@ -103,7 +103,13 @@ func main() {
 	argPipePath = flag.String("pipe", `\\.\pipe\openssh-ssh-agent`, "path to the pipe to listen")
 	argUnixSocketPath = flag.String("unix-socket", os.Getenv("SSH_AUTH_SOCK"), "path to the ssh-agent unix socket (only for ssh-agent mode)")
 
+	argDebug := flag.Bool("debug", false, "enable debug logs")
+
 	flag.Parse()
+
+	if *argDebug {
+		log.Level = log.Debug
+	}
 
 	// By default, listen on every possible supported endpoint except the one used as upstream agent
 	if *argFrom == "all" {
@@ -125,7 +131,7 @@ func main() {
 
 	for _, from := range fromValues {
 		if serverHandler, ok := sshAgentFromMap[from]; ok {
-			log.Printf("Handling ssh agent queries from %s", from)
+			log.Infof("Handling ssh agent queries from %s", from)
 
 			go serverHandler(queryChannel)
 		} else {
@@ -136,7 +142,7 @@ func main() {
 	}
 
 	if clientHandler, ok := sshAgentToMap[*argTo]; ok {
-		log.Printf("Forwarding ssh agent queries to %s", *argTo)
+		log.Infof("Forwarding ssh agent queries to %s", *argTo)
 		// Run upstream agent handler (blocking)
 		err := clientHandler(queryChannel)
 		if err != nil {

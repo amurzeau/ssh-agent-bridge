@@ -5,16 +5,16 @@ package namedPipe
 
 import (
 	"fmt"
-	"log"
 	"net"
 
 	"github.com/Microsoft/go-winio"
 	"github.com/amurzeau/ssh-agent-bridge/agent"
 	"github.com/amurzeau/ssh-agent-bridge/agent/common"
+	"github.com/amurzeau/ssh-agent-bridge/log"
 )
 
 func ClientPipe(pipePath string, queryChannel chan agent.AgentMessageQuery) error {
-	log.Printf("%s: forwarding to named-pipe at %s", PackageName, pipePath)
+	log.Infof("%s: forwarding to named-pipe at %s", PackageName, pipePath)
 
 	dialFunction := func() (net.Conn, error) {
 		conn, err := winio.DialPipe(pipePath, nil)

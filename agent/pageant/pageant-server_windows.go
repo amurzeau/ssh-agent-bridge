@@ -4,11 +4,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
 	"syscall"
 	"unsafe"
 
 	"github.com/amurzeau/ssh-agent-bridge/agent"
+	"github.com/amurzeau/ssh-agent-bridge/log"
 )
 
 var (
@@ -82,7 +82,7 @@ func processPageantQuery(mapNameZ []byte) error {
 
 	pMapName, _ := syscall.UTF16PtrFromString(mapName)
 
-	log.Printf("%s: opening memory map at %s", PackageName, mapName)
+	log.Debugf("%s: opening memory map at %s", PackageName, mapName)
 
 	mmap, _, err := winOpenFileMapping(syscall.FILE_MAP_WRITE, 0, (uintptr)(unsafe.Pointer(pMapName)))
 	if mmap == _NULL {
@@ -104,7 +104,7 @@ func processPageantQuery(mapNameZ []byte) error {
 		return fmt.Errorf("%s: failed to get memory map size (VirtualQuery): %w", PackageName, err)
 	}
 
-	log.Printf("%s: map size: %d", PackageName, memoryBasicInformation.RegionSize)
+	log.Debugf("%s: map size: %d", PackageName, memoryBasicInformation.RegionSize)
 
 	ptr, err := syscall.MapViewOfFile((syscall.Handle)(mmap), syscall.FILE_MAP_WRITE, 0, 0, 0)
 	if ptr == _NULL {
@@ -143,7 +143,7 @@ func handlerPageantWindowProc(hwnd uintptr, msg uint32, wParam uintptr, lParam u
 		copyData := *(*_COPYDATASTRUCT)(unsafe.Pointer(lParam))
 		if copyData.dwData == agentCopydataID {
 			if err := processPageantQuery(unsafe.Slice((*byte)(copyData.lpData), copyData.cbData)); err != nil {
-				log.Printf("%s: received bad message: %v", PackageName, err)
+				log.Errorf("%s: received bad message: %v", PackageName, err)
 			} else {
 				result = 1
 			}
@@ -168,7 +168,7 @@ func handlerPageantMessages(hInstance uintptr, nameP *uint16, hwndPageant uintpt
 		if int32(result) == 0 {
 			break
 		} else if int32(result) == -1 {
-			log.Printf("%s: error while processing pageant messages: %v", PackageName, err)
+			log.Errorf("%s: error while processing pageant messages: %v", PackageName, err)
 			break
 		}
 
@@ -234,10 +234,10 @@ func createPageantWindow() error {
 }
 
 func ServePageant(queryChannel chan agent.AgentMessageQuery) {
-	log.Printf("%s: listening for pageant requests\n", PackageName)
+	log.Infof("%s: listening for pageant requests\n", PackageName)
 
 	if isPageantAvailable() {
-		log.Printf("%s: error: a pageant is already existing, can't listen for pageant requests", PackageName)
+		log.Debugf("%s: error: a pageant is already existing, can't listen for pageant requests", PackageName)
 		return
 	}
 
@@ -245,6 +245,6 @@ func ServePageant(queryChannel chan agent.AgentMessageQuery) {
 
 	err := createPageantWindow()
 	if err != nil {
-		log.Printf("%s: failed to create pageant window: %v", PackageName, err)
+		log.Debugf("%s: failed to create pageant window: %v", PackageName, err)
 	}
 }

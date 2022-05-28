@@ -11,12 +11,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net"
 	"os"
 
 	"github.com/amurzeau/ssh-agent-bridge/agent"
 	"github.com/amurzeau/ssh-agent-bridge/agent/common"
+	"github.com/amurzeau/ssh-agent-bridge/log"
 )
 
 func handshakeConnection(conn net.Conn, expectedCookie []byte) error {
@@ -57,16 +57,16 @@ func handshakeConnection(conn net.Conn, expectedCookie []byte) error {
 
 func ServeUnixSocket(socketPath string, queryChannel chan agent.AgentMessageQuery) {
 	if socketPath == "" {
-		log.Printf("%s: empty socket path, skipping serving for ssh-agent queries", PackageName)
+		log.Errorf("%s: empty socket path, skipping serving for ssh-agent queries", PackageName)
 		return
 	}
 
-	log.Printf("%s: listening for ssh-agent requests on %s", PackageName, socketPath)
+	log.Infof("%s: listening for ssh-agent requests on %s", PackageName, socketPath)
 
 	// Use 0 as the port to listen on a random available port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		log.Printf("%s: failed to listen a TCP port: %v", PackageName, err)
+		log.Errorf("%s: failed to listen a TCP port: %v", PackageName, err)
 		return
 	}
 	defer listener.Close()
@@ -74,7 +74,7 @@ func ServeUnixSocket(socketPath string, queryChannel chan agent.AgentMessageQuer
 	cookie := make([]byte, 16)
 	_, err = rand.Read(cookie)
 	if err != nil {
-		log.Printf("%s: failed to generate a random cookie: %v", PackageName, err)
+		log.Errorf("%s: failed to generate a random cookie: %v", PackageName, err)
 		return
 	}
 
@@ -88,20 +88,20 @@ func ServeUnixSocket(socketPath string, queryChannel chan agent.AgentMessageQuer
 
 	err = ioutil.WriteFile(socketPath, []byte(socketData), 0777)
 	if err != nil {
-		log.Printf("%s: failed to write file %s: %v", PackageName, socketPath, err)
+		log.Errorf("%s: failed to write file %s: %v", PackageName, socketPath, err)
 		return
 	}
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Printf("%s: accept error: %v", PackageName, err)
+			log.Errorf("%s: accept error: %v", PackageName, err)
 			return
 		}
 
 		err = handshakeConnection(conn, cookie)
 		if err != nil {
-			log.Printf("%s: handshake failed: %v", PackageName, err)
+			log.Errorf("%s: handshake failed: %v", PackageName, err)
 			conn.Close()
 			continue
 		}

@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net"
 	"os"
 	"regexp"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/amurzeau/ssh-agent-bridge/agent"
 	"github.com/amurzeau/ssh-agent-bridge/agent/common"
+	"github.com/amurzeau/ssh-agent-bridge/log"
 )
 
 var socketRegex = regexp.MustCompile(`!<socket >(\d+) (s )?([A-Fa-f0-9-]+)`)
@@ -92,7 +92,7 @@ func connect_unix_socket(socketPath string) (net.Conn, error) {
 }
 
 func ClientUnixSocket(socketPath string, queryChannel chan agent.AgentMessageQuery) error {
-	log.Printf("forwarding to ssh-agent at %s", socketPath)
+	log.Infof("forwarding to ssh-agent at %s", socketPath)
 
 	dialFunction := func() (net.Conn, error) {
 		conn, err := connect_unix_socket(socketPath)

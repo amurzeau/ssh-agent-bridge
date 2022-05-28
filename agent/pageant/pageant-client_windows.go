@@ -4,12 +4,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
 	"sync"
 	"syscall"
 	"unsafe"
 
 	"github.com/amurzeau/ssh-agent-bridge/agent"
+	"github.com/amurzeau/ssh-agent-bridge/log"
 )
 
 var (
@@ -129,7 +129,7 @@ func pageantWindow() uintptr {
 func isPageantAvailable() bool { return pageantWindow() != 0 }
 
 func ClientPageant(queryChannel chan agent.AgentMessageQuery) error {
-	log.Printf("%s: forwarding to pageant", PackageName)
+	log.Infof("%s: forwarding to pageant", PackageName)
 
 	if !isPageantAvailable() {
 		return fmt.Errorf("%s: error: pageant is not available ! run pageant, else queries will fail", PackageName)
@@ -138,7 +138,7 @@ func ClientPageant(queryChannel chan agent.AgentMessageQuery) error {
 	for message := range queryChannel {
 		reply, err := query(message.Data)
 		if err != nil {
-			log.Printf("%s: query error: %v\n", PackageName, err)
+			log.Errorf("%s: query error: %v\n", PackageName, err)
 			message.ReplyChannel <- agent.AGENT_MESSAGE_ERROR_REPLY
 		} else {
 			message.ReplyChannel <- agent.AgentMessageReply{Data: reply}
