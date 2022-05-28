@@ -28,29 +28,9 @@ var (
 
 /////////////////////////
 
-const (
-	agentCopydataID = 0x804e50ba
-	wmCopydata      = 74
-)
-
-type _COPYDATASTRUCT struct {
-	dwData uintptr
-	cbData uint32
-	lpData unsafe.Pointer
-}
-
 var (
 	lock sync.Mutex
-
-	winFindWindow         = winAPI("user32.dll", "FindWindowW")
-	winGetCurrentThreadID = winAPI("kernel32.dll", "GetCurrentThreadId")
-	winSendMessage        = winAPI("user32.dll", "SendMessageW")
 )
-
-func winAPI(dllName, funcName string) func(...uintptr) (uintptr, uintptr, error) {
-	proc := syscall.MustLoadDLL(dllName).MustFindProc(funcName)
-	return func(a ...uintptr) (uintptr, uintptr, error) { return proc.Call(a...) }
-}
 
 // Query sends message msg to Pageant and returns response or error.
 // 'msg' is raw agent request with length prefix
@@ -102,7 +82,7 @@ func query(msg []byte) ([]byte, error) {
 		lpData: unsafe.Pointer(&(mapNameBytesZ[0])),
 	}
 
-	resp, _, _ := winSendMessage(paWin, wmCopydata, 0, uintptr(unsafe.Pointer(&cds)))
+	resp, _, _ := winSendMessage(paWin, _WM_COPYDATA, 0, uintptr(unsafe.Pointer(&cds)))
 
 	if resp == 0 {
 		return nil, ErrSendMessage

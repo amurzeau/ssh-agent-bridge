@@ -16,60 +16,6 @@ var (
 	ErrPageantExists = errors.New("pageant is already existing, can't listen for pageant requests")
 )
 
-var (
-	winCreateWindowEx   = winAPI("user32.dll", "CreateWindowExW")
-	winDestroyWindow    = winAPI("user32.dll", "DestroyWindow")
-	winShowWindow       = winAPI("user32.dll", "ShowWindow")
-	winGetMessage       = winAPI("user32.dll", "GetMessageW")
-	winTranslateMessage = winAPI("user32.dll", "TranslateMessage")
-	winDispatchMessage  = winAPI("user32.dll", "DispatchMessageW")
-	winRegisterClass    = winAPI("user32.dll", "RegisterClassW")
-	winUnregisterClass  = winAPI("user32.dll", "UnregisterClassW")
-	winDefWindowProc    = winAPI("user32.dll", "DefWindowProcW")
-	winGetModuleHandle  = winAPI("kernel32.dll", "GetModuleHandleW")
-	winOpenFileMapping  = winAPI("kernel32.dll", "OpenFileMappingW")
-	winVirtualQuery     = winAPI("kernel32.dll", "VirtualQuery")
-)
-
-const _CW_USEDEFAULT = 0x80000000
-const _NULL = 0
-const _SW_HIDE = 0
-
-type _WNDCLASS struct {
-	Style         uint32
-	LpfnWndProc   uintptr
-	CbClsExtra    int32
-	CbWndExtra    int32
-	HInstance     uintptr
-	HIcon         uintptr
-	HCursor       uintptr
-	HbrBackground uintptr
-	LpszMenuName  *uint16
-	LpszClassName *uint16
-}
-
-type _MSG struct {
-	hwnd     uintptr
-	message  int32
-	wParam   uintptr
-	lParam   uintptr
-	time     uint32
-	ptX      int32
-	ptY      int32
-	lPrivate uint32
-}
-
-type _MEMORY_BASIC_INFORMATION struct {
-	BaseAddress       uintptr
-	AllocationBase    uintptr
-	AllocationProtect uint32
-	PartitionId       uint16
-	RegionSize        uintptr
-	State             uint32
-	Protect           uint32
-	Type              uint32
-}
-
 var pageantServerQueryChannel chan agent.AgentMessageQuery
 var pageantServerReplyChannel chan agent.AgentMessageReply
 
@@ -139,7 +85,7 @@ func handlerPageantWindowProc(hwnd uintptr, msg uint32, wParam uintptr, lParam u
 	var result uintptr = 0
 
 	switch msg {
-	case wmCopydata:
+	case _WM_COPYDATA:
 		copyData := *(*_COPYDATASTRUCT)(unsafe.Pointer(lParam))
 		if copyData.dwData == agentCopydataID {
 			if err := processPageantQuery(unsafe.Slice((*byte)(copyData.lpData), copyData.cbData)); err != nil {
