@@ -107,6 +107,7 @@ func ClientUnixSocket(socketPath string, queryChannel chan agent.AgentMessageQue
 		conn, err := connectUnixSocket(socketPath)
 
 		if err == os.ErrNotExist {
+			log.Debugf("%s: sleeping 2s", PackageName)
 			time.Sleep(2 * time.Second)
 			err = common.ErrConnectionFailedMustRetry
 		}

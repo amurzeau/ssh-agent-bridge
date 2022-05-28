@@ -58,12 +58,14 @@ func handshakeConnection(conn net.Conn, expectedCookie []byte) error {
 }
 
 func checkIfAvailableUnixSocket(socketPath string) error {
+	log.Debugf("%s: checking socket file %s", PackageName, socketPath)
 	result, err := os.Stat(socketPath)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("%s: error while checking socket path %s: %w", PackageName, socketPath, err)
 		} else {
 			// File doesn't exist
+			log.Debugf("%s: socket file usable as it doesn't exist", PackageName)
 			return nil
 		}
 	} else if (result.Mode() & fs.ModeType) != 0 {
@@ -84,6 +86,7 @@ func checkIfAvailableUnixSocket(socketPath string) error {
 		if err != nil {
 			return fmt.Errorf("%s: failed to remove a supposed unused socket file: %s: %w", PackageName, socketPath, err)
 		}
+		log.Debugf("%s: socket file was stale and was deleted", PackageName)
 		return nil
 	} else {
 		conn.Close()
@@ -99,7 +102,7 @@ func ServeUnixSocket(socketPath string, queryChannel chan agent.AgentMessageQuer
 
 	err := checkIfAvailableUnixSocket(socketPath)
 	if err != nil {
-		log.Errorf("%s: can't use this file as socket file: %s: %w", PackageName, socketPath, err)
+		log.Errorf("%s: can't use this file as socket file: %s: %v", PackageName, socketPath, err)
 		return
 	}
 

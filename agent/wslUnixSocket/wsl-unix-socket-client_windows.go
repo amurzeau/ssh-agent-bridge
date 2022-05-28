@@ -21,6 +21,7 @@ func ClientWslUnixSocket(socketPath string, queryChannel chan agent.AgentMessage
 		conn, err := net.Dial("unix", socketPath)
 
 		if err == os.ErrNotExist {
+			log.Debugf("%s: sleeping 2s", PackageName)
 			time.Sleep(2 * time.Second)
 			err = common.ErrConnectionFailedMustRetry
 		}

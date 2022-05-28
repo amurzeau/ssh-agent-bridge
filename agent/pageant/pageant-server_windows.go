@@ -180,12 +180,12 @@ func createPageantWindow() error {
 }
 
 func ServePageant(queryChannel chan agent.AgentMessageQuery) {
-	log.Infof("%s: listening for pageant requests\n", PackageName)
-
 	if isPageantAvailable() {
-		log.Debugf("%s: error: a pageant is already existing, can't listen for pageant requests", PackageName)
+		log.Errorf("%s: error: a pageant is already existing, can't listen for pageant requests", PackageName)
 		return
 	}
+
+	log.Infof("%s: listening for pageant requests\n", PackageName)
 
 	pageantServerQueryChannel = queryChannel
 
