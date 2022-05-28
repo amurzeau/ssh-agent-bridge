@@ -19,15 +19,15 @@ import (
 
 var socketRegex = regexp.MustCompile(`!<socket >(\d+) (s )?([A-Fa-f0-9-]+)`)
 
-func connect_unix_socket(socketPath string) (net.Conn, error) {
+func getUnixSocketInfo(socketPath string) (*string, *string, error) {
 	socketData, err := ioutil.ReadFile(socketPath)
 	if err != nil {
-		return nil, fmt.Errorf("%s: opening %q: %w", PackageName, socketPath, err)
+		return nil, nil, fmt.Errorf("%s: opening %q: %w", PackageName, socketPath, err)
 	}
 
 	matches := socketRegex.FindStringSubmatch(string(socketData))
 	if matches == nil {
-		return nil, fmt.Errorf("%s: bad socket file data %q: %s", PackageName, socketPath, string(socketData))
+		return nil, nil, fmt.Errorf("%s: bad socket file data %q: %s", PackageName, socketPath, string(socketData))
 	}
 
 	tcpPort := matches[1]
@@ -41,14 +41,23 @@ func connect_unix_socket(socketPath string) (net.Conn, error) {
 		guid = matches[2]
 	}
 
-	address := fmt.Sprintf("localhost:%s", tcpPort)
+	return &tcpPort, &guid, nil
+}
+
+func connectUnixSocket(socketPath string) (net.Conn, error) {
+	tcpPort, cookie, err := getUnixSocketInfo(socketPath)
+	if err != nil {
+		return nil, fmt.Errorf("%s: can't read socket file %s: %w", PackageName, socketPath, err)
+	}
+
+	address := fmt.Sprintf("localhost:%s", *tcpPort)
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		return nil, fmt.Errorf("%s: can't connect to %s: %w", PackageName, address, err)
 	}
 
 	guid_raw := make([]byte, 16)
-	fmt.Sscanf(guid,
+	fmt.Sscanf(*cookie,
 		"%02x%02x%02x%02x-%02x%02x%02x%02x-%02x%02x%02x%02x-%02x%02x%02x%02x",
 		&guid_raw[3], &guid_raw[2], &guid_raw[1], &guid_raw[0],
 		&guid_raw[7], &guid_raw[6], &guid_raw[5], &guid_raw[4],
@@ -95,7 +104,7 @@ func ClientUnixSocket(socketPath string, queryChannel chan agent.AgentMessageQue
 	log.Infof("forwarding to ssh-agent at %s", socketPath)
 
 	dialFunction := func() (net.Conn, error) {
-		conn, err := connect_unix_socket(socketPath)
+		conn, err := connectUnixSocket(socketPath)
 
 		if err == os.ErrNotExist {
 			time.Sleep(2 * time.Second)

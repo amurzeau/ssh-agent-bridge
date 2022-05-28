@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"net"
 	"os"
@@ -56,18 +57,49 @@ func handshakeConnection(conn net.Conn, expectedCookie []byte) error {
 	return nil
 }
 
+func checkIfAvailableUnixSocket(socketPath string) error {
+	result, err := os.Stat(socketPath)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("%s: error while checking socket path %s: %w", PackageName, socketPath, err)
+		} else {
+			// File doesn't exist
+			return nil
+		}
+	} else if (result.Mode() & fs.ModeType) != 0 {
+		return fmt.Errorf("%s: socket file is not a regular file, won't overwrite it: %s", PackageName, socketPath)
+	}
+
+	tcpPort, _, err := getUnixSocketInfo(socketPath)
+	if err != nil {
+		return fmt.Errorf("%s: can't parse socket file, is it an unrelated file ? won't overwrite it: %s: %w", PackageName, socketPath, err)
+	}
+
+	address := net.JoinHostPort("127.0.0.1", *tcpPort)
+	conn, err := net.Dial("tcp", address)
+	if err != nil {
+		// Valid socket file but connection failed, the unix socket is not active
+		// So we are safe to remove it
+		err = os.Remove(socketPath)
+		if err != nil {
+			return fmt.Errorf("%s: failed to remove a supposed unused socket file: %s: %w", PackageName, socketPath, err)
+		}
+		return nil
+	} else {
+		conn.Close()
+		return fmt.Errorf("%s: cygwin socket path already exists and is active: %s", PackageName, socketPath)
+	}
+}
+
 func ServeUnixSocket(socketPath string, queryChannel chan agent.AgentMessageQuery) {
 	if socketPath == "" {
 		log.Errorf("%s: empty socket path, skipping serving for ssh-agent queries", PackageName)
 		return
 	}
 
-	result, err := os.Stat(socketPath)
-	if result != nil {
-		log.Errorf("%s: cygwin socket path already exists: %s", PackageName, socketPath)
-		return
-	} else if !errors.Is(err, os.ErrNotExist) {
-		log.Errorf("%s: error while checking socket path %s: %v", PackageName, socketPath, err)
+	err := checkIfAvailableUnixSocket(socketPath)
+	if err != nil {
+		log.Errorf("%s: can't use this file as socket file: %s: %w", PackageName, socketPath, err)
 		return
 	}
 
