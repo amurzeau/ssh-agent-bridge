@@ -4,7 +4,9 @@
 package wslUnixSocket
 
 import (
+	"errors"
 	"net"
+	"os"
 
 	"github.com/amurzeau/ssh-agent-bridge/agent"
 	"github.com/amurzeau/ssh-agent-bridge/agent/common"
@@ -14,6 +16,15 @@ import (
 func ServeWslUnixSocket(socketPath string, queryChannel chan agent.AgentMessageQuery) {
 	if socketPath == "" {
 		log.Errorf("%s: empty socket path, skipping serving for WSL ssh-agent queries", PackageName)
+		return
+	}
+
+	result, err := os.Stat(socketPath)
+	if result != nil {
+		log.Errorf("%s: wsl socket path already exists: %s", PackageName, socketPath)
+		return
+	} else if !errors.Is(err, os.ErrNotExist) {
+		log.Errorf("%s: error while checking socket path %s: %v", PackageName, socketPath, err)
 		return
 	}
 

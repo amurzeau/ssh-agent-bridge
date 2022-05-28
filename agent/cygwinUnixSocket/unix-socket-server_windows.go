@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -58,6 +59,15 @@ func handshakeConnection(conn net.Conn, expectedCookie []byte) error {
 func ServeUnixSocket(socketPath string, queryChannel chan agent.AgentMessageQuery) {
 	if socketPath == "" {
 		log.Errorf("%s: empty socket path, skipping serving for ssh-agent queries", PackageName)
+		return
+	}
+
+	result, err := os.Stat(socketPath)
+	if result != nil {
+		log.Errorf("%s: cygwin socket path already exists: %s", PackageName, socketPath)
+		return
+	} else if !errors.Is(err, os.ErrNotExist) {
+		log.Errorf("%s: error while checking socket path %s: %v", PackageName, socketPath, err)
 		return
 	}
 
