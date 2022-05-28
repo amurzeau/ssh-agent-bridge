@@ -123,7 +123,7 @@ func ServeUnixSocket(socketPath string, queryChannel chan agent.AgentMessageQuer
 		return
 	}
 
-	socketData := fmt.Sprintf("!<socket >%d s %02x%02x%02x%02x-%02x%02x%02x%02x-%02x%02x%02x%02x-%02x%02x%02x%02x",
+	socketData := fmt.Sprintf("!<socket >%d s %02X%02X%02X%02X-%02X%02X%02X%02X-%02X%02X%02X%02X-%02X%02X%02X%02X\000",
 		listener.Addr().(*net.TCPAddr).Port,
 		cookie[3], cookie[2], cookie[1], cookie[0],
 		cookie[7], cookie[6], cookie[5], cookie[4],
@@ -134,6 +134,12 @@ func ServeUnixSocket(socketPath string, queryChannel chan agent.AgentMessageQuer
 	err = ioutil.WriteFile(socketPath, []byte(socketData), 0400)
 	if err != nil {
 		log.Errorf("%s: failed to write file %s: %v", PackageName, socketPath, err)
+		return
+	}
+
+	err = setFileAttributes(socketPath, _FILE_ATTRIBUTE_READONLY|_FILE_ATTRIBUTE_SYSTEM)
+	if err != nil {
+		log.Errorf("%s: failed to set socket file attributes to %s: %v", PackageName, socketPath, err)
 		return
 	}
 
