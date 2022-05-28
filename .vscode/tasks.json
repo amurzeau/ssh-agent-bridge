@@ -6,7 +6,7 @@
         {
             "label": "Build for Windows",
             "type": "shell",
-            "command": "GOOS=windows GOARCH=amd64 go build -v -o build/ .",
+            "command": "GOOS=windows GOARCH=amd64 go build -ldflags \"-H windowsgui\" -v -o build/ .",
             "problemMatcher": [],
             "group": {
                 "kind": "build",
