@@ -93,7 +93,7 @@ func main() {
 		},
 	}
 
-	argFrom = flag.String("from", "all",
+	argFrom = flag.String("from", "",
 		fmt.Sprintf("comma-separated list of endpoint to listen on, available: all, %s",
 			strings.Join(keys(sshAgentFromMap), ", ")))
 
@@ -111,6 +111,10 @@ func main() {
 
 	if *argDebug {
 		log.Level = log.Debug
+	}
+
+	if *argFrom == "" {
+		log.Fatalf("--from is required, see help with --help")
 	}
 
 	// By default, listen on every possible supported endpoint except the one used as upstream agent
