@@ -113,11 +113,16 @@ func main() {
 	argWslUnixSocketPath = flag.String("wsl-socket", os.Getenv("SSH_AUTH_SOCK"), "path to the WSL ssh-agent unix socket for wsl-ssh-agent mode")
 
 	argDebug := flag.Bool("debug", false, "enable debug logs")
+	argNoGuiError := flag.Bool("no-gui-error", false, "don't show a message box for fatal error")
 
 	flag.Parse()
 
 	if *argDebug {
 		log.Level = log.Debug
+	}
+
+	if *argNoGuiError {
+		log.UseMessageBoxForFatal = false
 	}
 
 	if *argFrom == "" {

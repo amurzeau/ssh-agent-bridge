@@ -14,12 +14,17 @@ const (
 )
 
 var (
-	Level LogLevel = Info
+	Level                 LogLevel = Info
+	UseMessageBoxForFatal bool     = true
 )
 
 func Fatalf(format string, v ...any) {
-	outputDebugString(fmt.Sprintf(format, v...))
-	log.Fatalf(format, v...)
+	str := fmt.Sprintf(format, v...)
+	outputDebugString(str)
+	if UseMessageBoxForFatal {
+		messageBox(str)
+	}
+	log.Fatal(str)
 }
 
 func Errorf(format string, v ...any) {
