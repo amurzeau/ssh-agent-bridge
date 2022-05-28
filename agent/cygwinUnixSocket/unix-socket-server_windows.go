@@ -128,7 +128,7 @@ func ServeUnixSocket(socketPath string, queryChannel chan agent.AgentMessageQuer
 		cookie[15], cookie[14], cookie[13], cookie[12],
 	)
 
-	err = ioutil.WriteFile(socketPath, []byte(socketData), 0777)
+	err = ioutil.WriteFile(socketPath, []byte(socketData), 0400)
 	if err != nil {
 		log.Errorf("%s: failed to write file %s: %v", PackageName, socketPath, err)
 		return
