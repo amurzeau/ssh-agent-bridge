@@ -14,7 +14,7 @@ This tool can listen for any of these and forward agent queries to any of these 
 
 Run `./ssh-agent-bridge.exe --help`:
 ```
-Usage of D:\Projets_C-build\ssh-agent-bridge.exe:
+Usage of ssh-agent-bridge.exe:
   -debug
         enable debug logs
   -from string
