@@ -109,7 +109,7 @@ func main() {
 			strings.Join(keys(sshAgentToMap), ", ")))
 
 	argPipePath = flag.String("pipe", `\\.\pipe\openssh-ssh-agent`, "path to the pipe to use for pipe mode")
-	argCygwinUnixSocketPath = flag.String("unix-socket", os.Getenv("SSH_AUTH_SOCK"), "path to the ssh-agent unix socket for cygwin-ssh-agent mode")
+	argCygwinUnixSocketPath = flag.String("cygwin-socket", os.Getenv("SSH_AUTH_SOCK"), "path to the ssh-agent unix socket for cygwin-ssh-agent mode")
 	argWslUnixSocketPath = flag.String("wsl-socket", os.Getenv("SSH_AUTH_SOCK"), "path to the WSL ssh-agent unix socket for wsl-ssh-agent mode")
 
 	argDebug := flag.Bool("debug", false, "enable debug logs")
