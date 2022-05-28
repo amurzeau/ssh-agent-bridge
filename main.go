@@ -5,9 +5,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"regexp"
 	"runtime"
 	"strings"
+	"syscall"
 
 	"github.com/amurzeau/ssh-agent-bridge/agent"
 	"github.com/amurzeau/ssh-agent-bridge/agent/cygwinUnixSocket"
@@ -153,6 +155,15 @@ func onReady() {
 	go func() {
 		<-mExit.ClickedCh
 		log.Debugf("Requesting quit")
+		systray.Quit()
+		log.Debugf("Finished quitting")
+	}()
+
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigs
+		log.Debugf("Termination signal received, exiting")
 		systray.Quit()
 		log.Debugf("Finished quitting")
 	}()
