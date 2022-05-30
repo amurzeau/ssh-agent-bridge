@@ -15,6 +15,7 @@ import (
 	"github.com/amurzeau/ssh-agent-bridge/agent/cygwinUnixSocket"
 	"github.com/amurzeau/ssh-agent-bridge/agent/namedPipe"
 	"github.com/amurzeau/ssh-agent-bridge/agent/pageant"
+	"github.com/amurzeau/ssh-agent-bridge/agent/pageantPipe"
 	"github.com/amurzeau/ssh-agent-bridge/agent/wslUnixSocket"
 	"github.com/amurzeau/ssh-agent-bridge/log"
 
@@ -47,6 +48,9 @@ var sshAgentFromMap = map[string]func(*agent.AgentContext){
 	"pageant": func(ctx *agent.AgentContext) {
 		pageant.ServePageant(ctx)
 	},
+	"pageant-pipe": func(ctx *agent.AgentContext) {
+		pageantPipe.ServePageantPipe(ctx)
+	},
 }
 
 var sshAgentToMap = map[string]func(*agent.AgentContext) error{
@@ -61,6 +65,9 @@ var sshAgentToMap = map[string]func(*agent.AgentContext) error{
 	},
 	"pageant": func(ctx *agent.AgentContext) error {
 		return pageant.ClientPageant(ctx)
+	},
+	"pageant-pipe": func(ctx *agent.AgentContext) error {
+		return pageantPipe.ClientPageantPipe(ctx)
 	},
 }
 
