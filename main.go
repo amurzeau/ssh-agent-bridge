@@ -158,6 +158,9 @@ func onReady() {
 	go func() {
 		<-mExit.ClickedCh
 		agentContext.Stop()
+		<-mExit.ClickedCh
+		log.Debugf("agentContext: hard exit")
+		os.Exit(0)
 	}()
 
 	go func() {
@@ -165,6 +168,9 @@ func onReady() {
 		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 		<-sigs
 		agentContext.Stop()
+		<-sigs
+		log.Debugf("agentContext: hard exit")
+		os.Exit(0)
 	}()
 
 	go func() {
