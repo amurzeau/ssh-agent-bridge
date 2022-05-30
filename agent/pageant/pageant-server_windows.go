@@ -115,11 +115,13 @@ func (p *pageantServerContext) handlerPageantMessages(hInstance uintptr, nameP *
 
 	go func() {
 		<-p.ctx.Done()
-		winSendMessage(hwndPageant, _WM_QUIT, 0, 0)
+		winPostMessage(hwndPageant, _WM_QUIT, 0, 0)
 	}()
 
 	for {
-		result, _, err := winGetMessage(uintptr(unsafe.Pointer(&msg)), _NULL, 0, 0)
+		result, _, err := winGetMessage(uintptr(unsafe.Pointer(&msg)), hwndPageant, 0, 0)
+
+		log.Debugf("%s: received window message %d: %d", PackageName, result, msg.message)
 
 		if int32(result) == 0 {
 			break

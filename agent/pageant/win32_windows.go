@@ -59,6 +59,7 @@ type _MEMORY_BASIC_INFORMATION struct {
 var (
 	winFindWindow         = winAPI("user32.dll", "FindWindowW")
 	winSendMessage        = winAPI("user32.dll", "SendMessageW")
+	winPostMessage        = winAPI("user32.dll", "PostMessageW")
 	winCreateWindowEx     = winAPI("user32.dll", "CreateWindowExW")
 	winDestroyWindow      = winAPI("user32.dll", "DestroyWindow")
 	winShowWindow         = winAPI("user32.dll", "ShowWindow")
