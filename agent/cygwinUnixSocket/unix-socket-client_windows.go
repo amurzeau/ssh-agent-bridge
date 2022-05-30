@@ -49,7 +49,7 @@ func connectUnixSocket(socketPath string) (net.Conn, error) {
 		return nil, fmt.Errorf("%s: can't read socket file %s: %w", PackageName, socketPath, err)
 	}
 
-	address := fmt.Sprintf("localhost:%s", *tcpPort)
+	address := fmt.Sprintf("127.0.0.1:%s", *tcpPort)
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		return nil, fmt.Errorf("%s: can't connect to %s: %w", PackageName, address, err)
