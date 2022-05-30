@@ -24,7 +24,7 @@ func Fatalf(format string, v ...any) {
 	if UseMessageBoxForFatal {
 		messageBox(str)
 	}
-	log.Fatal(str)
+	log.Print(str)
 }
 
 func Errorf(format string, v ...any) {

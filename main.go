@@ -187,6 +187,7 @@ func onReady() {
 			log.Fatalf("Bad --from value %s, available: %s",
 				from,
 				strings.Join(keys(sshAgentFromMap), ", "))
+			agentContext.Stop()
 		}
 	}
 
@@ -204,6 +205,7 @@ func onReady() {
 		log.Fatalf("Bad --to value %s, available: %s",
 			*argTo,
 			strings.Join(keys(sshAgentToMap), ", "))
+		agentContext.Stop()
 	}
 }
 
