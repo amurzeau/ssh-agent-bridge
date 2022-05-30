@@ -44,17 +44,20 @@ func getUnixSocketInfo(socketPath string) (*string, *string, error) {
 }
 
 func connectUnixSocket(socketPath string) (net.Conn, error) {
+	log.Debugf("%s: reading socket file", PackageName)
 	tcpPort, cookie, err := getUnixSocketInfo(socketPath)
 	if err != nil {
 		return nil, fmt.Errorf("%s: can't read socket file %s: %w", PackageName, socketPath, err)
 	}
 
+	log.Debugf("%s: connecting TCP socket", PackageName)
 	address := fmt.Sprintf("127.0.0.1:%s", *tcpPort)
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		return nil, fmt.Errorf("%s: can't connect to %s: %w", PackageName, address, err)
 	}
 
+	log.Debugf("%s: sending cookie", PackageName)
 	guid_raw := make([]byte, 16)
 	fmt.Sscanf(*cookie,
 		"%02x%02x%02x%02x-%02x%02x%02x%02x-%02x%02x%02x%02x-%02x%02x%02x%02x",
@@ -64,19 +67,17 @@ func connectUnixSocket(socketPath string) (net.Conn, error) {
 		&guid_raw[15], &guid_raw[14], &guid_raw[13], &guid_raw[12],
 	)
 
-	// fmt.Println("Writing first GUID bytes")
 	if _, err = conn.Write(guid_raw); err != nil {
 		return nil, fmt.Errorf("%s: write b: %w", PackageName, err)
 	}
 
-	// fmt.Println("Reading guid_reply")
+	log.Debugf("%s: receiving cookie reply", PackageName)
 	guid_reply := make([]byte, 16)
 	if _, err = conn.Read(guid_reply); err != nil {
 		return nil, fmt.Errorf("%s: read b2: %w", PackageName, err)
 	}
-	// fmt.Printf("Received b2: %q %s\n", b2, string(b2))
 
-	// fmt.Println("Writing pid,gid,uid")
+	log.Debugf("%s: writing identification", PackageName)
 	pidsUids := make([]byte, 12)
 	pid := os.Getpid()
 	uid := 0
@@ -84,17 +85,16 @@ func connectUnixSocket(socketPath string) (net.Conn, error) {
 	binary.LittleEndian.PutUint32(pidsUids, uint32(pid))
 	binary.LittleEndian.PutUint32(pidsUids[4:], uint32(uid))
 	binary.LittleEndian.PutUint32(pidsUids[8:], uint32(gid))
-	// fmt.Println("  Writing", pidsUids, string(pidsUids))
+
 	if _, err = conn.Write(pidsUids); err != nil {
 		return nil, fmt.Errorf("%s: write pid,uid,gid: %w", PackageName, err)
 	}
 
-	// fmt.Println("Reading b3")
+	log.Debugf("%s: reading identification", PackageName)
 	b3 := make([]byte, 12)
 	if _, err = conn.Read(b3); err != nil {
 		return nil, fmt.Errorf("%s: read pid,uid,gid: %w", PackageName, err)
 	}
-	// fmt.Printf("Received b3: %v %s\n", b3, string(b3))
 
 	return conn, nil
 }

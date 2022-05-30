@@ -82,6 +82,7 @@ func GenericNetClient(packageName string, dialFunction func() (net.Conn, error),
 
 	for message := range ctx.QueryChannel {
 		func() { // Use an anonymous function so defer works
+			log.Debugf("%s: connecting", packageName)
 			conn, err := dialFunction()
 			if err != nil {
 				log.Errorf("%s: can't connect: %v", packageName, err)
@@ -91,19 +92,21 @@ func GenericNetClient(packageName string, dialFunction func() (net.Conn, error),
 
 			defer conn.Close()
 
-			_, err = conn.Write(message.Data)
+			n, err := conn.Write(message.Data)
 			if err != nil {
 				log.Errorf("%s: write failed, can't handle query, will try to reconnect: %v\n", packageName, err)
 				message.ReplyChannel <- agent.AGENT_MESSAGE_ERROR_REPLY
 				return
 			}
+			log.Debugf("%s: write %d bytes", packageName, n)
 
-			n, err := agent.ReadAgentMessage(conn, buf)
+			n, err = agent.ReadAgentMessage(conn, buf)
 			if err != nil {
 				log.Errorf("%s: reply read error, will try to reconnect: %v\n", packageName, err)
 				message.ReplyChannel <- agent.AGENT_MESSAGE_ERROR_REPLY
 				return
 			}
+			log.Debugf("%s: read %d bytes", packageName, n)
 
 			message.ReplyChannel <- agent.AgentMessageReply{Data: buf[:n]}
 		}()
