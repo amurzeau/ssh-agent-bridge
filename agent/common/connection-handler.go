@@ -16,10 +16,16 @@ func handleClientRead(processName string, c net.Conn, ctx *agent.AgentContext, r
 	defer c.Close()
 	defer close(replyChannel)
 
+	doneChannel := make(chan bool)
+	defer close(doneChannel)
+
 	go func() {
-		<-ctx.Done()
-		log.Debugf("%s: stopping connection", processName)
-		c.Close()
+		select {
+		case <-ctx.Done():
+			log.Debugf("%s: stopping connection", processName)
+			c.Close()
+		case <-doneChannel:
+		}
 	}()
 
 	log.Debugf("%s: client connected [%s]", processName, c.RemoteAddr().Network())
