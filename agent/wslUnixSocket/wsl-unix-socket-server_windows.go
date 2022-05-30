@@ -30,6 +30,9 @@ func ServeWslUnixSocket(socketPath string, ctx *agent.AgentContext) {
 
 	log.Infof("%s: listening for agent requests on WSL unix socket %v\n", PackageName, socketPath)
 
+	// On cancel, remove the socket file
+	defer os.Remove(socketPath)
+
 	listenFunction := func() (net.Listener, error) {
 		return net.Listen("unix", socketPath)
 	}
