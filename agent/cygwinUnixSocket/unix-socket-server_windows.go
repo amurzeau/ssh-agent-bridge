@@ -154,14 +154,18 @@ func ServeUnixSocket(socketPath string, ctx *agent.AgentContext) {
 	// On cancel, close the listener which will cause defers to remove the socket file
 	go func() {
 		<-ctx.Done()
+		log.Debugf("%s: stopping", PackageName)
 		listener.Close()
 	}()
 
 	for {
 		conn, err := listener.Accept()
-		if err != nil {
+		if errors.Is(err, net.ErrClosed) {
+			// intentional closing of network socket
+			break
+		} else if err != nil {
 			log.Errorf("%s: accept error: %v", PackageName, err)
-			return
+			break
 		}
 
 		err = handshakeConnection(conn, cookie)
@@ -173,4 +177,6 @@ func ServeUnixSocket(socketPath string, ctx *agent.AgentContext) {
 
 		common.HandleAgentConnection(PackageName, conn, ctx)
 	}
+
+	log.Debugf("%s: stopped", PackageName)
 }

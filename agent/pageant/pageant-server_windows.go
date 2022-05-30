@@ -115,6 +115,7 @@ func (p *pageantServerContext) handlerPageantMessages(hInstance uintptr, nameP *
 
 	go func() {
 		<-p.ctx.Done()
+		log.Debugf("%s: stopping", PackageName)
 		winPostMessage(hwndPageant, _WM_QUIT, 0, 0)
 	}()
 
@@ -133,6 +134,8 @@ func (p *pageantServerContext) handlerPageantMessages(hInstance uintptr, nameP *
 		winTranslateMessage(uintptr(unsafe.Pointer(&msg)))
 		winDispatchMessage(uintptr(unsafe.Pointer(&msg)))
 	}
+
+	log.Debugf("%s: stopped", PackageName)
 }
 
 func (p *pageantServerContext) createPageantWindow() error {

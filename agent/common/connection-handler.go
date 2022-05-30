@@ -2,10 +2,10 @@ package common
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"net"
 
+	"github.com/Microsoft/go-winio"
 	"github.com/amurzeau/ssh-agent-bridge/agent"
 	"github.com/amurzeau/ssh-agent-bridge/log"
 )
@@ -18,6 +18,7 @@ func handleClientRead(processName string, c net.Conn, ctx *agent.AgentContext, r
 
 	go func() {
 		<-ctx.Done()
+		log.Debugf("%s: stopping connection", processName)
 		c.Close()
 	}()
 
@@ -26,7 +27,10 @@ func handleClientRead(processName string, c net.Conn, ctx *agent.AgentContext, r
 	buf := make([]byte, 262144)
 	for {
 		n, err := agent.ReadAgentMessage(c, buf)
-		if err != nil {
+		if errors.Is(err, net.ErrClosed) {
+			// intentional closing of network socket
+			break
+		} else if err != nil {
 			if err != io.EOF {
 				log.Debugf("%s: read error: %v\n", processName, err)
 			}
@@ -72,14 +76,14 @@ func GenericNetClient(packageName string, dialFunction func() (net.Conn, error),
 
 	for message := range ctx.QueryChannel {
 		func() { // Use an anonymous function so defer works
-		conn, err := dialFunction()
+			conn, err := dialFunction()
 			if err != nil {
 				log.Errorf("%s: can't connect: %v", packageName, err)
 				message.ReplyChannel <- agent.AGENT_MESSAGE_ERROR_REPLY
 				return
 			}
 
-		defer conn.Close()
+			defer conn.Close()
 
 			_, err = conn.Write(message.Data)
 			if err != nil {
@@ -99,6 +103,8 @@ func GenericNetClient(packageName string, dialFunction func() (net.Conn, error),
 		}()
 	}
 
+	log.Debugf("%s: stopped", packageName)
+
 	return nil
 }
 
@@ -112,16 +118,22 @@ func GenericNetServer(packageName string, listenFunction func() (net.Listener, e
 
 	go func() {
 		<-ctx.Done()
+		log.Debugf("%s: stopping", packageName)
 		listener.Close()
 	}()
 
 	for {
 		conn, err := listener.Accept()
-		if err != nil {
+		if errors.Is(err, net.ErrClosed) || errors.Is(err, winio.ErrPipeListenerClosed) {
+			// intentional closing of network socket
+			break
+		} else if err != nil {
 			log.Errorf("%s: accept error: %v", packageName, err)
-			return
+			break
 		}
 
 		HandleAgentConnection(packageName, conn, ctx)
 	}
+
+	log.Debugf("%s: stopped", packageName)
 }
