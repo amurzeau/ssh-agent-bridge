@@ -5,13 +5,11 @@ package cygwinUnixSocket
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
 	"regexp"
-	"time"
 
 	"github.com/amurzeau/ssh-agent-bridge/agent"
 	"github.com/amurzeau/ssh-agent-bridge/agent/common"
@@ -106,13 +104,6 @@ func ClientUnixSocket(socketPath string, ctx *agent.AgentContext) error {
 
 	dialFunction := func() (net.Conn, error) {
 		conn, err := connectUnixSocket(socketPath)
-
-		if errors.Is(err, os.ErrNotExist) {
-			log.Debugf("%s: sleeping 2s", PackageName)
-			time.Sleep(2 * time.Second)
-			err = common.ErrConnectionFailedMustRetry
-		}
-
 		if err != nil {
 			err = fmt.Errorf("%s: can't connect to %s: %w", PackageName, socketPath, err)
 		}

@@ -68,50 +68,35 @@ func HandleAgentConnection(processName string, conn net.Conn, ctx *agent.AgentCo
 }
 
 func GenericNetClient(packageName string, dialFunction func() (net.Conn, error), ctx *agent.AgentContext) error {
-	var retryConnection bool = true
+	buf := make([]byte, agent.MAX_AGENT_MESSAGE_SIZE)
 
-	// Try to connect indefinitely to support reconnection (or restart of the agent server)
-	var lastConnectionSucceeded = true // Used for logging
-	for retryConnection {
+	for message := range ctx.QueryChannel {
+		func() { // Use an anonymous function so defer works
 		conn, err := dialFunction()
-		if errors.Is(err, ErrConnectionFailedMustRetry) {
-			if lastConnectionSucceeded {
-				lastConnectionSucceeded = false
-				log.Errorf("%s: failed to connect (successive failures won't be logged): %v", packageName, err)
+			if err != nil {
+				log.Errorf("%s: can't connect: %v", packageName, err)
+				message.ReplyChannel <- agent.AGENT_MESSAGE_ERROR_REPLY
+				return
 			}
-			// Retry to connect
-			continue
-		} else if err != nil {
-			return fmt.Errorf("%s: can't connect: %w", packageName, err)
-		}
+
 		defer conn.Close()
 
-		lastConnectionSucceeded = true
-
-		buf := make([]byte, agent.MAX_AGENT_MESSAGE_SIZE)
-
-		// If we go out of the following for, queryChannel was closed and we should not try to reconnect
-		retryConnection = false
-
-		for message := range ctx.QueryChannel {
-			_, err := conn.Write(message.Data)
+			_, err = conn.Write(message.Data)
 			if err != nil {
 				log.Errorf("%s: write failed, can't handle query, will try to reconnect: %v\n", packageName, err)
-				// Requeue the message
-				ctx.QueryChannel <- message
-				break
+				message.ReplyChannel <- agent.AGENT_MESSAGE_ERROR_REPLY
+				return
 			}
 
 			n, err := agent.ReadAgentMessage(conn, buf)
 			if err != nil {
 				log.Errorf("%s: reply read error, will try to reconnect: %v\n", packageName, err)
-				// Requeue the message
-				ctx.QueryChannel <- message
-				break
+				message.ReplyChannel <- agent.AGENT_MESSAGE_ERROR_REPLY
+				return
 			}
 
 			message.ReplyChannel <- agent.AgentMessageReply{Data: buf[:n]}
-		}
+		}()
 	}
 
 	return nil
