@@ -12,9 +12,14 @@ import (
 
 var ErrConnectionFailedMustRetry = errors.New("connection failed but should be retried")
 
-func handleClientRead(processName string, c net.Conn, queryChannel chan agent.AgentMessageQuery, replyChannel chan agent.AgentMessageReply) {
+func handleClientRead(processName string, c net.Conn, ctx *agent.AgentContext, replyChannel chan agent.AgentMessageReply) {
 	defer c.Close()
 	defer close(replyChannel)
+
+	go func() {
+		<-ctx.Done()
+		c.Close()
+	}()
 
 	log.Debugf("%s: client connected [%s]", processName, c.RemoteAddr().Network())
 
@@ -32,21 +37,13 @@ func handleClientRead(processName string, c net.Conn, queryChannel chan agent.Ag
 
 		log.Debugf("%s: read %d data\n", processName, len(message.Data))
 
-		queryChannel <- message
+		ctx.QueryChannel <- message
 	}
 	log.Debugf("%s: client disconnected", processName)
 }
 
 func handleClientWrite(processName string, c net.Conn, replyChannel chan agent.AgentMessageReply) {
-	defer c.Close()
-
-	for {
-		message, more := <-replyChannel
-
-		if !more {
-			break
-		}
-
+	for message := range replyChannel {
 		log.Debugf("%s: write %d data\n", processName, len(message.Data))
 
 		_, err := c.Write(message.Data)
@@ -59,21 +56,25 @@ func handleClientWrite(processName string, c net.Conn, replyChannel chan agent.A
 	}
 }
 
-func HandleAgentConnection(processName string, conn net.Conn, queryChannel chan agent.AgentMessageQuery) {
+func HandleAgentConnection(processName string, conn net.Conn, ctx *agent.AgentContext) {
 	replyChannel := make(chan agent.AgentMessageReply)
 
-	go handleClientRead(processName, conn, queryChannel, replyChannel)
-	go handleClientWrite(processName, conn, replyChannel)
+	ctx.Go(func() {
+		handleClientRead(processName, conn, ctx, replyChannel)
+	})
+	ctx.Go(func() {
+		handleClientWrite(processName, conn, replyChannel)
+	})
 }
 
-func GenericNetClient(packageName string, dialFunction func() (net.Conn, error), queryChannel chan agent.AgentMessageQuery) error {
+func GenericNetClient(packageName string, dialFunction func() (net.Conn, error), ctx *agent.AgentContext) error {
 	var retryConnection bool = true
 
 	// Try to connect indefinitely to support reconnection (or restart of the agent server)
 	var lastConnectionSucceeded = true // Used for logging
 	for retryConnection {
 		conn, err := dialFunction()
-		if err == ErrConnectionFailedMustRetry {
+		if errors.Is(err, ErrConnectionFailedMustRetry) {
 			if lastConnectionSucceeded {
 				lastConnectionSucceeded = false
 				log.Errorf("%s: failed to connect (successive failures won't be logged): %v", packageName, err)
@@ -92,12 +93,12 @@ func GenericNetClient(packageName string, dialFunction func() (net.Conn, error),
 		// If we go out of the following for, queryChannel was closed and we should not try to reconnect
 		retryConnection = false
 
-		for message := range queryChannel {
+		for message := range ctx.QueryChannel {
 			_, err := conn.Write(message.Data)
 			if err != nil {
 				log.Errorf("%s: write failed, can't handle query, will try to reconnect: %v\n", packageName, err)
 				// Requeue the message
-				queryChannel <- message
+				ctx.QueryChannel <- message
 				break
 			}
 
@@ -105,7 +106,7 @@ func GenericNetClient(packageName string, dialFunction func() (net.Conn, error),
 			if err != nil {
 				log.Errorf("%s: reply read error, will try to reconnect: %v\n", packageName, err)
 				// Requeue the message
-				queryChannel <- message
+				ctx.QueryChannel <- message
 				break
 			}
 
@@ -116,13 +117,18 @@ func GenericNetClient(packageName string, dialFunction func() (net.Conn, error),
 	return nil
 }
 
-func GenericNetServer(packageName string, listenFunction func() (net.Listener, error), queryChannel chan agent.AgentMessageQuery) {
+func GenericNetServer(packageName string, listenFunction func() (net.Listener, error), ctx *agent.AgentContext) {
 	listener, err := listenFunction()
 	if err != nil {
 		log.Errorf("%s: listen error: %v", packageName, err)
 		return
 	}
 	defer listener.Close()
+
+	go func() {
+		<-ctx.Done()
+		listener.Close()
+	}()
 
 	for {
 		conn, err := listener.Accept()
@@ -131,6 +137,6 @@ func GenericNetServer(packageName string, listenFunction func() (net.Listener, e
 			return
 		}
 
-		HandleAgentConnection(packageName, conn, queryChannel)
+		HandleAgentConnection(packageName, conn, ctx)
 	}
 }

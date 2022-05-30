@@ -94,7 +94,35 @@ func checkIfAvailableUnixSocket(socketPath string) error {
 	}
 }
 
-func ServeUnixSocket(socketPath string, queryChannel chan agent.AgentMessageQuery) {
+func writeSocketFile(socketPath string, listenPort int) ([]byte, error) {
+	cookie := make([]byte, 16)
+	_, err := rand.Read(cookie)
+	if err != nil {
+		return nil, fmt.Errorf("%s: failed to generate a random cookie: %v", PackageName, err)
+	}
+
+	socketData := fmt.Sprintf("!<socket >%d s %02X%02X%02X%02X-%02X%02X%02X%02X-%02X%02X%02X%02X-%02X%02X%02X%02X\000",
+		listenPort,
+		cookie[3], cookie[2], cookie[1], cookie[0],
+		cookie[7], cookie[6], cookie[5], cookie[4],
+		cookie[11], cookie[10], cookie[9], cookie[8],
+		cookie[15], cookie[14], cookie[13], cookie[12],
+	)
+
+	err = ioutil.WriteFile(socketPath, []byte(socketData), 0400)
+	if err != nil {
+		return nil, fmt.Errorf("%s: failed to write file %s: %v", PackageName, socketPath, err)
+	}
+
+	err = setFileAttributes(socketPath, _FILE_ATTRIBUTE_READONLY|_FILE_ATTRIBUTE_SYSTEM)
+	if err != nil {
+		return nil, fmt.Errorf("%s: failed to set socket file attributes to %s: %v", PackageName, socketPath, err)
+	}
+
+	return cookie, nil
+}
+
+func ServeUnixSocket(socketPath string, ctx *agent.AgentContext) {
 	if socketPath == "" {
 		log.Errorf("%s: empty socket path, skipping serving for ssh-agent queries", PackageName)
 		return
@@ -116,32 +144,18 @@ func ServeUnixSocket(socketPath string, queryChannel chan agent.AgentMessageQuer
 	}
 	defer listener.Close()
 
-	cookie := make([]byte, 16)
-	_, err = rand.Read(cookie)
+	cookie, err := writeSocketFile(socketPath, listener.Addr().(*net.TCPAddr).Port)
+	defer os.Remove(socketPath)
 	if err != nil {
-		log.Errorf("%s: failed to generate a random cookie: %v", PackageName, err)
+		log.Errorf("%s: failed create socket file %s: %v", PackageName, socketPath, err)
 		return
 	}
 
-	socketData := fmt.Sprintf("!<socket >%d s %02X%02X%02X%02X-%02X%02X%02X%02X-%02X%02X%02X%02X-%02X%02X%02X%02X\000",
-		listener.Addr().(*net.TCPAddr).Port,
-		cookie[3], cookie[2], cookie[1], cookie[0],
-		cookie[7], cookie[6], cookie[5], cookie[4],
-		cookie[11], cookie[10], cookie[9], cookie[8],
-		cookie[15], cookie[14], cookie[13], cookie[12],
-	)
-
-	err = ioutil.WriteFile(socketPath, []byte(socketData), 0400)
-	if err != nil {
-		log.Errorf("%s: failed to write file %s: %v", PackageName, socketPath, err)
-		return
-	}
-
-	err = setFileAttributes(socketPath, _FILE_ATTRIBUTE_READONLY|_FILE_ATTRIBUTE_SYSTEM)
-	if err != nil {
-		log.Errorf("%s: failed to set socket file attributes to %s: %v", PackageName, socketPath, err)
-		return
-	}
+	// On cancel, close the listener which will cause defers to remove the socket file
+	go func() {
+		<-ctx.Done()
+		listener.Close()
+	}()
 
 	for {
 		conn, err := listener.Accept()
@@ -157,6 +171,6 @@ func ServeUnixSocket(socketPath string, queryChannel chan agent.AgentMessageQuer
 			continue
 		}
 
-		common.HandleAgentConnection(PackageName, conn, queryChannel)
+		common.HandleAgentConnection(PackageName, conn, ctx)
 	}
 }

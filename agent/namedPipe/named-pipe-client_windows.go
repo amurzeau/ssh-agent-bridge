@@ -4,6 +4,7 @@
 package namedPipe
 
 import (
+	"errors"
 	"fmt"
 	"net"
 
@@ -13,13 +14,13 @@ import (
 	"github.com/amurzeau/ssh-agent-bridge/log"
 )
 
-func ClientPipe(pipePath string, queryChannel chan agent.AgentMessageQuery) error {
+func ClientPipe(pipePath string, ctx *agent.AgentContext) error {
 	log.Infof("%s: forwarding to named-pipe at %s", PackageName, pipePath)
 
 	dialFunction := func() (net.Conn, error) {
 		conn, err := winio.DialPipe(pipePath, nil)
 
-		if err == winio.ErrTimeout {
+		if errors.Is(err, winio.ErrTimeout) {
 			err = common.ErrConnectionFailedMustRetry
 		}
 
@@ -30,5 +31,5 @@ func ClientPipe(pipePath string, queryChannel chan agent.AgentMessageQuery) erro
 		return conn, err
 	}
 
-	return common.GenericNetClient(PackageName, dialFunction, queryChannel)
+	return common.GenericNetClient(PackageName, dialFunction, ctx)
 }

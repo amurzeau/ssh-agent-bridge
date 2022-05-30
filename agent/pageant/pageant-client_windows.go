@@ -108,14 +108,14 @@ func pageantWindow() uintptr {
 // isPageantAvailable returns true if Pageant is started
 func isPageantAvailable() bool { return pageantWindow() != 0 }
 
-func ClientPageant(queryChannel chan agent.AgentMessageQuery) error {
+func ClientPageant(ctx *agent.AgentContext) error {
 	log.Infof("%s: forwarding to pageant", PackageName)
 
 	if !isPageantAvailable() {
 		return fmt.Errorf("%s: error: pageant is not available ! run pageant, else queries will fail", PackageName)
 	}
 
-	for message := range queryChannel {
+	for message := range ctx.QueryChannel {
 		reply, err := query(message.Data)
 		if err != nil {
 			log.Errorf("%s: query error: %v\n", PackageName, err)

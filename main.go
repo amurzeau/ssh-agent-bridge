@@ -30,35 +30,37 @@ var (
 	argPipePath             *string
 	argCygwinUnixSocketPath *string
 	argWslUnixSocketPath    *string
+
+	agentContext = agent.CreateAgent()
 )
 
-var sshAgentFromMap = map[string]func(chan agent.AgentMessageQuery){
-	"pipe": func(queryChannel chan agent.AgentMessageQuery) {
-		namedPipe.ServePipe(*argPipePath, queryChannel)
+var sshAgentFromMap = map[string]func(*agent.AgentContext){
+	"pipe": func(ctx *agent.AgentContext) {
+		namedPipe.ServePipe(*argPipePath, ctx)
 	},
-	"cygwin": func(queryChannel chan agent.AgentMessageQuery) {
-		cygwinUnixSocket.ServeUnixSocket(*argCygwinUnixSocketPath, queryChannel)
+	"cygwin": func(ctx *agent.AgentContext) {
+		cygwinUnixSocket.ServeUnixSocket(*argCygwinUnixSocketPath, ctx)
 	},
-	"wsl": func(queryChannel chan agent.AgentMessageQuery) {
-		wslUnixSocket.ServeWslUnixSocket(*argWslUnixSocketPath, queryChannel)
+	"wsl": func(ctx *agent.AgentContext) {
+		wslUnixSocket.ServeWslUnixSocket(*argWslUnixSocketPath, ctx)
 	},
-	"pageant": func(queryChannel chan agent.AgentMessageQuery) {
-		pageant.ServePageant(queryChannel)
+	"pageant": func(ctx *agent.AgentContext) {
+		pageant.ServePageant(ctx)
 	},
 }
 
-var sshAgentToMap = map[string]func(chan agent.AgentMessageQuery) error{
-	"pipe": func(queryChannel chan agent.AgentMessageQuery) error {
-		return namedPipe.ClientPipe(*argPipePath, queryChannel)
+var sshAgentToMap = map[string]func(*agent.AgentContext) error{
+	"pipe": func(ctx *agent.AgentContext) error {
+		return namedPipe.ClientPipe(*argPipePath, ctx)
 	},
-	"cygwin": func(queryChannel chan agent.AgentMessageQuery) error {
-		return cygwinUnixSocket.ClientUnixSocket(*argCygwinUnixSocketPath, queryChannel)
+	"cygwin": func(ctx *agent.AgentContext) error {
+		return cygwinUnixSocket.ClientUnixSocket(*argCygwinUnixSocketPath, ctx)
 	},
-	"wsl": func(queryChannel chan agent.AgentMessageQuery) error {
-		return wslUnixSocket.ClientWslUnixSocket(*argWslUnixSocketPath, queryChannel)
+	"wsl": func(ctx *agent.AgentContext) error {
+		return wslUnixSocket.ClientWslUnixSocket(*argWslUnixSocketPath, ctx)
 	},
-	"pageant": func(queryChannel chan agent.AgentMessageQuery) error {
-		return pageant.ClientPageant(queryChannel)
+	"pageant": func(ctx *agent.AgentContext) error {
+		return pageant.ClientPageant(ctx)
 	},
 }
 
@@ -152,24 +154,24 @@ func onReady() {
 	systray.SetTitle("SSH Agent Bridge")
 	systray.SetTooltip("SSH Agent Bridge")
 	mExit := systray.AddMenuItem("Exit", "Exit SSH Agent Bridge")
+
 	go func() {
 		<-mExit.ClickedCh
-		log.Debugf("Requesting quit")
-		systray.Quit()
-		log.Debugf("Finished quitting")
+		agentContext.Stop()
 	}()
 
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
+		sigs := make(chan os.Signal, 1)
+		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 		<-sigs
-		log.Debugf("Termination signal received, exiting")
-		systray.Quit()
-		log.Debugf("Finished quitting")
+		agentContext.Stop()
 	}()
 
-	// A single channel is used for all queries, as we support only one target "to"
-	queryChannel := make(chan agent.AgentMessageQuery)
+	go func() {
+		<-agentContext.Done()
+		agentContext.Wait()
+		systray.Quit()
+	}()
 
 	// Listen on all requested endpoints
 	fromValues := strings.Split(strings.ReplaceAll(*argFrom, " ", ""), ",")
@@ -178,7 +180,9 @@ func onReady() {
 		if serverHandler, ok := sshAgentFromMap[from]; ok {
 			log.Infof("Handling ssh agent queries from %s", from)
 
-			go serverHandler(queryChannel)
+			agentContext.Go(func() {
+				serverHandler(&agentContext)
+			})
 		} else {
 			log.Fatalf("Bad --from value %s, available: %s",
 				from,
@@ -189,12 +193,13 @@ func onReady() {
 	if clientHandler, ok := sshAgentToMap[*argTo]; ok {
 		log.Infof("Forwarding ssh agent queries to %s", *argTo)
 		// Run upstream agent handler
-		go func() {
-			err := clientHandler(queryChannel)
+		agentContext.Go(func() {
+			err := clientHandler(&agentContext)
 			if err != nil {
 				log.Fatalf("error with upstream agent: %v", err)
+				agentContext.Stop()
 			}
-		}()
+		})
 	} else {
 		log.Fatalf("Bad --to value %s, available: %s",
 			*argTo,

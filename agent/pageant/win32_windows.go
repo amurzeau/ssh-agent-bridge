@@ -7,6 +7,7 @@ import (
 
 const (
 	agentCopydataID = 0x804e50ba
+	_WM_QUIT        = 0x0012
 	_WM_COPYDATA    = 74
 
 	_CW_USEDEFAULT = 0x80000000

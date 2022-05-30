@@ -16,10 +16,14 @@ var (
 	ErrPageantExists = errors.New("pageant is already existing, can't listen for pageant requests")
 )
 
-var pageantServerQueryChannel chan agent.AgentMessageQuery
-var pageantServerReplyChannel chan agent.AgentMessageReply
+type pageantServerContext struct {
+	ctx          *agent.AgentContext
+	ReplyChannel chan agent.AgentMessageReply
+}
 
-func processPageantQuery(mapNameZ []byte) error {
+var globalPageantState pageantServerContext = pageantServerContext{}
+
+func (p *pageantServerContext) processPageantQuery(mapNameZ []byte) error {
 	if len(mapNameZ) < 1 || mapNameZ[len(mapNameZ)-1] != 0 {
 		return fmt.Errorf("%s: bad map name, should end with \\0", PackageName)
 	}
@@ -72,9 +76,9 @@ func processPageantQuery(mapNameZ []byte) error {
 	msg := make([]byte, agentMessageSize+4)
 	copy(msg, mmSlice)
 
-	pageantServerQueryChannel <- agent.AgentMessageQuery{Data: msg, ReplyChannel: pageantServerReplyChannel}
+	p.ctx.QueryChannel <- agent.AgentMessageQuery{Data: msg, ReplyChannel: p.ReplyChannel}
 
-	agentMessageQuery := <-pageantServerReplyChannel
+	agentMessageQuery := <-p.ReplyChannel
 
 	copy(mmSlice, agentMessageQuery.Data)
 
@@ -88,7 +92,7 @@ func handlerPageantWindowProc(hwnd uintptr, msg uint32, wParam uintptr, lParam u
 	case _WM_COPYDATA:
 		copyData := *(*_COPYDATASTRUCT)(unsafe.Pointer(lParam))
 		if copyData.dwData == agentCopydataID {
-			if err := processPageantQuery(unsafe.Slice((*byte)(copyData.lpData), copyData.cbData)); err != nil {
+			if err := globalPageantState.processPageantQuery(unsafe.Slice((*byte)(copyData.lpData), copyData.cbData)); err != nil {
 				log.Errorf("%s: received bad message: %v", PackageName, err)
 			} else {
 				result = 1
@@ -100,13 +104,19 @@ func handlerPageantWindowProc(hwnd uintptr, msg uint32, wParam uintptr, lParam u
 	return result
 }
 
-func handlerPageantMessages(hInstance uintptr, nameP *uint16, hwndPageant uintptr) {
+func (p *pageantServerContext) handlerPageantMessages(hInstance uintptr, nameP *uint16, hwndPageant uintptr) {
 	var msg _MSG
 
-	pageantServerReplyChannel = make(chan agent.AgentMessageReply)
+	p.ReplyChannel = make(chan agent.AgentMessageReply)
+	defer close(p.ReplyChannel)
 
 	defer winUnregisterClass(uintptr(unsafe.Pointer(nameP)), hInstance)
 	defer winDestroyWindow(hwndPageant)
+
+	go func() {
+		<-p.ctx.Done()
+		winSendMessage(hwndPageant, _WM_QUIT, 0, 0)
+	}()
 
 	for {
 		result, _, err := winGetMessage(uintptr(unsafe.Pointer(&msg)), _NULL, 0, 0)
@@ -123,7 +133,7 @@ func handlerPageantMessages(hInstance uintptr, nameP *uint16, hwndPageant uintpt
 	}
 }
 
-func createPageantWindow() error {
+func (p *pageantServerContext) createPageantWindow() error {
 	// based on https://github.com/github/putty/blob/7003b43963aef6cdf2841c2a882a684025f1d806/windows/winpgnt.c#L1178
 
 	windowNameUnicode, _ := syscall.UTF16PtrFromString("Pageant")
@@ -174,12 +184,12 @@ func createPageantWindow() error {
 	winShowWindow(hwndPageant, _SW_HIDE)
 
 	atom = 0 // disable UnregisterClass in defer
-	handlerPageantMessages(hInstance, windowNameUnicode, hwndPageant)
+	p.handlerPageantMessages(hInstance, windowNameUnicode, hwndPageant)
 
 	return nil
 }
 
-func ServePageant(queryChannel chan agent.AgentMessageQuery) {
+func ServePageant(ctx *agent.AgentContext) {
 	if isPageantAvailable() {
 		log.Errorf("%s: error: a pageant is already existing, can't listen for pageant requests", PackageName)
 		return
@@ -187,9 +197,9 @@ func ServePageant(queryChannel chan agent.AgentMessageQuery) {
 
 	log.Infof("%s: listening for pageant requests\n", PackageName)
 
-	pageantServerQueryChannel = queryChannel
+	globalPageantState.ctx = ctx
 
-	err := createPageantWindow()
+	err := globalPageantState.createPageantWindow()
 	if err != nil {
 		log.Debugf("%s: failed to create pageant window: %v", PackageName, err)
 	}

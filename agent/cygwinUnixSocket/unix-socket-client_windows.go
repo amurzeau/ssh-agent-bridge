@@ -5,6 +5,7 @@ package cygwinUnixSocket
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -100,13 +101,13 @@ func connectUnixSocket(socketPath string) (net.Conn, error) {
 	return conn, nil
 }
 
-func ClientUnixSocket(socketPath string, queryChannel chan agent.AgentMessageQuery) error {
+func ClientUnixSocket(socketPath string, ctx *agent.AgentContext) error {
 	log.Infof("forwarding to ssh-agent at %s", socketPath)
 
 	dialFunction := func() (net.Conn, error) {
 		conn, err := connectUnixSocket(socketPath)
 
-		if err == os.ErrNotExist {
+		if errors.Is(err, os.ErrNotExist) {
 			log.Debugf("%s: sleeping 2s", PackageName)
 			time.Sleep(2 * time.Second)
 			err = common.ErrConnectionFailedMustRetry
@@ -119,5 +120,5 @@ func ClientUnixSocket(socketPath string, queryChannel chan agent.AgentMessageQue
 		return conn, err
 	}
 
-	return common.GenericNetClient(PackageName, dialFunction, queryChannel)
+	return common.GenericNetClient(PackageName, dialFunction, ctx)
 }

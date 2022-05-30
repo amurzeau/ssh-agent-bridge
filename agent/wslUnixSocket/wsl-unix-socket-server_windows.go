@@ -13,7 +13,7 @@ import (
 	"github.com/amurzeau/ssh-agent-bridge/log"
 )
 
-func ServeWslUnixSocket(socketPath string, queryChannel chan agent.AgentMessageQuery) {
+func ServeWslUnixSocket(socketPath string, ctx *agent.AgentContext) {
 	if socketPath == "" {
 		log.Errorf("%s: empty socket path, skipping serving for WSL ssh-agent queries", PackageName)
 		return
@@ -33,5 +33,5 @@ func ServeWslUnixSocket(socketPath string, queryChannel chan agent.AgentMessageQ
 	listenFunction := func() (net.Listener, error) {
 		return net.Listen("unix", socketPath)
 	}
-	common.GenericNetServer(PackageName, listenFunction, queryChannel)
+	common.GenericNetServer(PackageName, listenFunction, ctx)
 }

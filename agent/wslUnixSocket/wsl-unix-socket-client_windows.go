@@ -4,6 +4,7 @@
 package wslUnixSocket
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -14,13 +15,13 @@ import (
 	"github.com/amurzeau/ssh-agent-bridge/log"
 )
 
-func ClientWslUnixSocket(socketPath string, queryChannel chan agent.AgentMessageQuery) error {
+func ClientWslUnixSocket(socketPath string, ctx *agent.AgentContext) error {
 	log.Infof("forwarding to WSL ssh-agent at %s", socketPath)
 
 	dialFunction := func() (net.Conn, error) {
 		conn, err := net.Dial("unix", socketPath)
 
-		if err == os.ErrNotExist {
+		if errors.Is(err, os.ErrNotExist) {
 			log.Debugf("%s: sleeping 2s", PackageName)
 			time.Sleep(2 * time.Second)
 			err = common.ErrConnectionFailedMustRetry
@@ -33,5 +34,5 @@ func ClientWslUnixSocket(socketPath string, queryChannel chan agent.AgentMessage
 		return conn, err
 	}
 
-	return common.GenericNetClient(PackageName, dialFunction, queryChannel)
+	return common.GenericNetClient(PackageName, dialFunction, ctx)
 }
